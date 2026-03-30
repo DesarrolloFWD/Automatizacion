@@ -48,12 +48,38 @@ def ejecutar_robot(email, password, sid):
         driver.get("https://siigonube.siigo.com/#/login")
         st.success("✅ ¡Página cargada sin explotar!")
         
-        # PASO 4: LOGIN
-        st.write("🔑 **Paso 4:** Ingresando usuario y contraseña...")
-        user_input = wait.until(EC.element_to_be_clickable((By.ID, "username")))
-        user_input.send_keys(email)
-        driver.find_element(By.ID, "password").send_keys(password)
-        driver.find_element(By.ID, "login-button").click()
+       # PASO 4: LOGIN (Versión Humana)
+        st.write("🔑 **Paso 4:** Ingresando credenciales...")
+        
+        # Esperar a que cualquier campo de tipo email/text aparezca
+        try:
+            # Buscamos el campo de usuario por ID o por nombre de atributo común
+            user_field = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[name='username'], #username")))
+            user_field.click()
+            user_field.clear()
+            for letra in email:
+                user_field.send_keys(letra)
+                time.sleep(0.1) # Simula escritura humana
+            
+            pass_field = driver.find_element(By.CSS_SELECTOR, "input[type='password'], #password")
+            pass_field.click()
+            for letra in password:
+                pass_field.send_keys(letra)
+                time.sleep(0.1)
+            
+            st.write("🖱️ Haciendo clic en el botón de ingreso...")
+            login_btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], #login-button")
+            driver.execute_script("arguments[0].click();", login_btn)
+            
+        except Exception as e_login:
+            st.warning("⚠️ No se encontraron los campos estándar. Intentando método alternativo...")
+            # Si falla el anterior, intentamos buscar por XPATH genérico
+            driver.find_element(By.XPATH, "//input[contains(@id, 'user')]").send_keys(email)
+            driver.find_element(By.XPATH, "//input[contains(@type, 'pass')]").send_keys(password)
+            driver.find_element(By.XPATH, "//*[contains(text(), 'Ingresar')]").click()
+
+        st.write("⏳ Validando sesión... (15 seg)")
+        time.sleep(15)
         
         st.write("⏳ Esperando a que cargue el menú principal (10 seg)...")
         time.sleep(10)
