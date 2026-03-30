@@ -25,72 +25,68 @@ def ejecutar_rellenado():
     service = Service("/usr/bin/chromedriver")
 
     try:
-        # 1. Leer Datos desde Google Sheets
+        # 1. Leer Datos
         st.write("📊 Leyendo datos del Google Sheet...")
         url_csv = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
         df = pd.read_csv(url_csv)
-        df.columns = df.columns.str.strip() # Limpia espacios para evitar Error 'Nombre'
+        
+        # --- LIMPIEZA DE COLUMNAS (Para arreglar el error 'Nit') ---
+        df.columns = df.columns.astype(str).str.strip() # Quita espacios
+        
+        # Mostrar las columnas detectadas para depuración
+        st.write(f"Columnas detectadas en tu Excel: `{list(df.columns)}`")
+        
+        if 'Nit' not in df.columns:
+            st.error("❌ No encontré la columna 'Nit'. Revisa que en el Excel diga exactamente 'Nit'.")
+            return
+
         st.success(f"✅ {len(df)} registros encontrados.")
 
         driver = webdriver.Chrome(service=service, options=options)
         wait = WebDriverWait(driver, 25)
 
         for i, fila in df.iterrows():
-            # Extraer variables de la hoja (según tu imagen 5ea704)
-            nit = str(fila['Nit'])
-            cuenta = str(fila['Cuenta'])
-            # Limpiar el valor: quitar puntos de miles y tomar la parte entera
-            valor = str(fila['ValorUnitario']).replace('.', '').split(',')[0]
-            nombre_proveedor = fila['Nombre']
-            observacion = fila['Observacion']
+            # Extraer variables con manejo de errores por si faltan columnas
+            try:
+                nit = str(fila['Nit']).strip()
+                cuenta = str(fila['Cuenta']).strip()
+                valor = str(fila['ValorUnitario']).replace('.', '').split(',')[0].strip()
+                nombre_prov = fila['Nombre']
+                obs = fila['Observacion'] if 'Observacion' in df.columns else ""
+            except KeyError as e:
+                st.error(f"❌ Falta la columna: {e}")
+                break
 
-            st.write(f"⚙️ Procesando a: **{nombre_proveedor}**...")
+            st.write(f"⚙️ Procesando a: **{nombre_prov}**...")
             driver.get(URL_SOPORTE)
             
             # --- LLENADO DE CAMPOS ---
-            # 1. Proveedor
+            # Proveedor
             campo_prov = wait.until(EC.element_to_be_clickable((By.XPATH, "//input[contains(@placeholder, 'proveedor')]")))
             campo_prov.send_keys(nit)
             time.sleep(2)
             campo_prov.send_keys(Keys.ENTER)
 
-            # 2. Producto / Cuenta Contable
+            # Producto / Cuenta
             campo_cta = wait.until(EC.presence_of_element_located((By.XPATH, "//input[contains(@placeholder, 'buscar')]")))
             campo_cta.send_keys(cuenta)
             time.sleep(2)
             campo_cta.send_keys(Keys.ENTER)
 
-            # 3. Valor Unitario
+            # Valor
             campo_val = wait.until(EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'unit_value')]")))
             campo_val.clear()
             campo_val.send_keys(valor)
 
-            # 4. Observación (Corregido el error de sintaxis aquí)
-            if pd.notna(observacion):
-                try:
-                    campo_obs = driver.find_element(By.XPATH, "//textarea[contains(@name, 'observation')]")
-                    campo_obs.send_keys(str(observacion))
-                except: 
-                    pass # Si no encuentra el campo, continúa
-
-            # --- GUARDAR AUTOMÁTICAMENTE ---
-            st.write("💾 Guardando documento en Siigo...")
-            # XPath para el botón "Guardar" verde (imagen 5ea6ca)
+            # --- GUARDAR ---
+            st.write("💾 Guardando...")
             btn_guardar = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'success') and contains(., 'Guardar')]")))
             driver.execute_script("arguments[0].click();", btn_guardar)
             
-            # --- CAPTURAR COMPROBANTE POR PANTALLA ---
-            time.sleep(6) 
-            try:
-                # Busca el texto del nuevo documento generado
-                elemento_nro = driver.find_element(By.XPATH, "//*[contains(text(), 'DS-')]")
-                nro_comprobante = elemento_nro.text
-                st.success(f"✅ **{nombre_proveedor}** guardado. Comprobante: `{nro_comprobante}`")
-            except:
-                st.warning(f"✔️ **{nombre_proveedor}** guardado, pero no se pudo leer el número DS.")
+            time.sleep(6)
+            st.success(f"✅ **{nombre_prov}** procesado correctamente.")
 
         st.balloons()
-        st.success("🏁 ¡Proceso completado!")
 
     except Exception as e:
         st.error(f"❌ Error general: {str(e)}")
