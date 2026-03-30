@@ -25,7 +25,7 @@ def ejecutar_rellenado():
     service = Service("/usr/bin/chromedriver")
 
     try:
-        # 1. Leer Datos desde Google Sheets (Modo lectura)
+        # 1. Leer Datos desde Google Sheets
         st.write("📊 Leyendo datos del Google Sheet...")
         url_csv = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
         df = pd.read_csv(url_csv)
@@ -36,9 +36,10 @@ def ejecutar_rellenado():
         wait = WebDriverWait(driver, 25)
 
         for i, fila in df.iterrows():
-            # Extraer variables de la hoja (image_5ea704)
+            # Extraer variables de la hoja (según tu imagen 5ea704)
             nit = str(fila['Nit'])
             cuenta = str(fila['Cuenta'])
+            # Limpiar el valor: quitar puntos de miles y tomar la parte entera
             valor = str(fila['ValorUnitario']).replace('.', '').split(',')[0]
             nombre_proveedor = fila['Nombre']
             observacion = fila['Observacion']
@@ -64,31 +65,32 @@ def ejecutar_rellenado():
             campo_val.clear()
             campo_val.send_keys(valor)
 
-            # 4. Observación (opcional)
+            # 4. Observación (Corregido el error de sintaxis aquí)
             if pd.notna(observacion):
                 try:
                     campo_obs = driver.find_element(By.XPATH, "//textarea[contains(@name, 'observation')]")
                     campo_obs.send_keys(str(observacion))
-                extra: pass
+                except: 
+                    pass # Si no encuentra el campo, continúa
 
             # --- GUARDAR AUTOMÁTICAMENTE ---
             st.write("💾 Guardando documento en Siigo...")
-            # XPath específico para el botón "Guardar" verde
+            # XPath para el botón "Guardar" verde (imagen 5ea6ca)
             btn_guardar = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'success') and contains(., 'Guardar')]")))
             driver.execute_script("arguments[0].click();", btn_guardar)
             
             # --- CAPTURAR COMPROBANTE POR PANTALLA ---
-            time.sleep(6) # Tiempo para que procese el guardado
+            time.sleep(6) 
             try:
-                # Intentamos capturar el número del DS que aparece arriba a la izquierda o en el input de número
+                # Busca el texto del nuevo documento generado
                 elemento_nro = driver.find_element(By.XPATH, "//*[contains(text(), 'DS-')]")
                 nro_comprobante = elemento_nro.text
-                st.success(f"✅ **{nombre_proveedor}** guardado con éxito. Comprobante: `{nro_comprobante}`")
+                st.success(f"✅ **{nombre_proveedor}** guardado. Comprobante: `{nro_comprobante}`")
             except:
-                st.warning(f"✔️ **{nombre_proveedor}** guardado, pero no se visualizó el número de comprobante.")
+                st.warning(f"✔️ **{nombre_proveedor}** guardado, pero no se pudo leer el número DS.")
 
         st.balloons()
-        st.success("🏁 ¡Proceso completado para todas las filas!")
+        st.success("🏁 ¡Proceso completado!")
 
     except Exception as e:
         st.error(f"❌ Error general: {str(e)}")
