@@ -48,42 +48,48 @@ def ejecutar_robot(email, password, sid):
         driver.get("https://siigonube.siigo.com/#/login")
         st.success("✅ ¡Página cargada sin explotar!")
         
-       # PASO 4: LOGIN (Versión Humana)
+      # PASO 4: LOGIN (Versión Inteligente)
         st.write("🔑 **Paso 4:** Ingresando credenciales...")
         
-        # Esperar a que cualquier campo de tipo email/text aparezca
-        try:
-            # Buscamos el campo de usuario por ID o por nombre de atributo común
-            user_field = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[name='username'], #username")))
-            user_field.click()
-            user_field.clear()
-            for letra in email:
-                user_field.send_keys(letra)
-                time.sleep(0.1) # Simula escritura humana
+        # Le damos tiempo extra para que los campos aparezcan
+        time.sleep(5) 
+        
+        # TRUCO: Siigo a veces usa un iframe. Intentamos encontrar los inputs de forma general
+        inputs = driver.find_elements(By.TAG_NAME, "input")
+        
+        if len(inputs) >= 2:
+            st.write(f"🔎 Se encontraron {len(inputs)} campos. Intentando llenar...")
+            for campo in inputs:
+                tipo = campo.get_attribute("type")
+                # El primer campo suele ser el usuario, o el que es tipo email/text
+                if tipo in ["email", "text"] and not campo.get_attribute("value"):
+                    campo.click()
+                    for letra in email:
+                        campo.send_keys(letra)
+                        time.sleep(0.05)
+                # El campo de password es fácil de identificar
+                if tipo == "password":
+                    campo.click()
+                    for letra in password:
+                        campo.send_keys(letra)
+                        time.sleep(0.05)
             
-            pass_field = driver.find_element(By.CSS_SELECTOR, "input[type='password'], #password")
-            pass_field.click()
-            for letra in password:
-                pass_field.send_keys(letra)
-                time.sleep(0.1)
-            
-            st.write("🖱️ Haciendo clic en el botón de ingreso...")
-            login_btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], #login-button")
-            driver.execute_script("arguments[0].click();", login_btn)
-            
-        except Exception as e_login:
-            st.warning("⚠️ No se encontraron los campos estándar. Intentando método alternativo...")
-            # Si falla el anterior, intentamos buscar por XPATH genérico
-            driver.find_element(By.XPATH, "//input[contains(@id, 'user')]").send_keys(email)
-            driver.find_element(By.XPATH, "//input[contains(@type, 'pass')]").send_keys(password)
-            driver.find_element(By.XPATH, "//*[contains(text(), 'Ingresar')]").click()
+            # Buscamos el botón que diga "Ingresar" o sea tipo "submit"
+            time.sleep(2)
+            botones = driver.find_elements(By.TAG_NAME, "button")
+            for btn in botones:
+                if "login" in btn.get_attribute("id").lower() or "submit" in btn.get_attribute("type").lower() or "Ingresar" in btn.text:
+                    driver.execute_script("arguments[0].click();", btn)
+                    break
+        else:
+            # Si no encuentra inputs normales, probamos con los selectores exactos actuales de Siigo
+            st.warning("Usando selectores de emergencia...")
+            wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(email)
+            driver.find_element(By.NAME, "password").send_keys(password)
+            driver.find_element(By.ID, "login-button").click()
 
         st.write("⏳ Validando sesión... (15 seg)")
         time.sleep(15)
-        
-        st.write("⏳ Esperando a que cargue el menú principal (10 seg)...")
-        time.sleep(10)
-
         # PASO 5: NAVEGACIÓN
         st.write("📍 **Paso 5:** Buscando la ruta de Documentos Soporte...")
         driver.get("https://siigonube.siigo.com/#/purchase/1889")
