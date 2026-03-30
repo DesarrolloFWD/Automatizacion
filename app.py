@@ -8,103 +8,81 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-st.set_page_config(page_title="Siigo Automator", page_icon="🤖")
-st.title("🤖 Automatización Documento Soporte Siigo")
+# --- CONFIGURACIÓN FIJA ---
+SHEET_ID = "1xam93zbK1A8Ujt1Sv7wdrUfoFcaMeeCNRTcENqwELKM"
+URL_SOPORTE = "https://siigonube.siigo.com/#/purchase/1889"
 
-with st.sidebar:
-    st.header("🔑 Credenciales")
-    user_email = st.text_input("Correo Siigo")
-    user_pass = st.text_input("Contraseña Siigo", type="password")
-    sheet_id = st.text_input("ID de Google Sheet")
+st.set_page_config(page_title="Siigo Rellenado Automático", page_icon="📝")
+st.title("📝 Rellenado de Documento Soporte")
+st.markdown(f"""
+**Instrucciones:**
+1. Abre Siigo en otra pestaña de este navegador e inicia sesión.
+2. Una vez logueado, regresa aquí y presiona el botón.
+""")
 
-def ejecutar_robot(email, password, sid):
+def ejecutar_rellenado():
+    options = Options()
+    options.add_argument('--headless=new')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--blink-settings=imagesEnabled=false')
+    options.binary_location = "/usr/bin/chromium" 
+    service = Service("/usr/bin/chromedriver")
+
     try:
-        # PASO 1: LEER DATOS (Sin encender navegador aún)
-        st.write("📊 **Paso 1:** Leyendo datos de Google Sheets...")
-        url_csv = f"https://docs.google.com/spreadsheets/d/{sid}/export?format=csv"
+        # 1. Leer Datos
+        st.write("📊 Leyendo datos del Google Sheet...")
+        url_csv = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
         df = pd.read_csv(url_csv)
-        st.success(f"✅ ¡Éxito! {len(df)} registros listos para procesar.")
+        st.success(f"✅ {len(df)} registros encontrados.")
 
-        # PASO 2: CONFIGURACIÓN LIGERA DEL NAVEGADOR
-        st.write("⚙️ **Paso 2:** Encendiendo el robot (modo bajo consumo)...")
-        options = Options()
-        options.add_argument('--headless=new')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage') # Clave para evitar error de memoria
-        options.add_argument('--disable-gpu')
-        options.add_argument('--window-size=1920x1080')
-        # ¡EL SECRETO!: No cargar imágenes ni CSS pesado para ahorrar RAM
-        options.add_argument('--blink-settings=imagesEnabled=false') 
-        
-        options.binary_location = "/usr/bin/chromium" 
-        service = Service("/usr/bin/chromedriver")
-        
+        # 2. Iniciar Navegador
         driver = webdriver.Chrome(service=service, options=options)
         wait = WebDriverWait(driver, 20)
-        st.success("✅ ¡Robot encendido sin problemas!")
 
-        # PASO 3: ENTRAR A SIIGO
-        st.write("🌐 **Paso 3:** Cargando la página de Siigo...")
-        driver.get("https://siigonube.siigo.com/#/login")
-        st.success("✅ ¡Página cargada sin explotar!")
+        # 3. Ir directo a la creación
+        st.write(f"🌐 Abriendo ruta de creación...")
+        driver.get(URL_SOPORTE)
         
-      # PASO 4: LOGIN (Versión Inteligente)
-        st.write("🔑 **Paso 4:** Ingresando credenciales...")
-        
-        # Le damos tiempo extra para que los campos aparezcan
-        time.sleep(5) 
-        
-        # TRUCO: Siigo a veces usa un iframe. Intentamos encontrar los inputs de forma general
-        inputs = driver.find_elements(By.TAG_NAME, "input")
-        
-        if len(inputs) >= 2:
-            st.write(f"🔎 Se encontraron {len(inputs)} campos. Intentando llenar...")
-            for campo in inputs:
-                tipo = campo.get_attribute("type")
-                # El primer campo suele ser el usuario, o el que es tipo email/text
-                if tipo in ["email", "text"] and not campo.get_attribute("value"):
-                    campo.click()
-                    for letra in email:
-                        campo.send_keys(letra)
-                        time.sleep(0.05)
-                # El campo de password es fácil de identificar
-                if tipo == "password":
-                    campo.click()
-                    for letra in password:
-                        campo.send_keys(letra)
-                        time.sleep(0.05)
+        # PROCESO DE LLENADO POR CADA FILA
+        progreso = st.progress(0)
+        for i, fila in df.iterrows():
+            st.write(f"⚙️ Rellenando datos de: **{fila['Nombre']}**...")
             
-            # Buscamos el botón que diga "Ingresar" o sea tipo "submit"
-            time.sleep(2)
-            botones = driver.find_elements(By.TAG_NAME, "button")
-            for btn in botones:
-                if "login" in btn.get_attribute("id").lower() or "submit" in btn.get_attribute("type").lower() or "Ingresar" in btn.text:
-                    driver.execute_script("arguments[0].click();", btn)
-                    break
-        else:
-            # Si no encuentra inputs normales, probamos con los selectores exactos actuales de Siigo
-            st.warning("Usando selectores de emergencia...")
-            wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(email)
-            driver.find_element(By.NAME, "password").send_keys(password)
-            driver.find_element(By.ID, "login-button").click()
+            # Esperar a que el campo de NIT esté listo
+            # Usamos un selector genérico que busque por placeholder
+            try:
+                campo_nit = wait.until(EC.visibility_of_element_located((By.XPATH, "//input[contains(@placeholder, 'proveedor')]")))
+                campo_nit.clear()
+                campo_nit.send_keys(str(fila['NIT']))
+                time.sleep(3) # Espera para que Siigo cargue el tercero
 
-        st.write("⏳ Validando sesión... (15 seg)")
-        time.sleep(15)
-        # PASO 5: NAVEGACIÓN
-        st.write("📍 **Paso 5:** Buscando la ruta de Documentos Soporte...")
-        driver.get("https://siigonube.siigo.com/#/purchase/1889")
-        time.sleep(5)
-        
-        st.success("🏁 ¡LLEGAMOS A LA META DE PRUEBA! La conexión es 100% estable.")
+                # Rellenar Producto/Servicio
+                campo_prod = driver.find_element(By.XPATH, "//input[contains(@placeholder, 'ítem')]")
+                campo_prod.send_keys(fila['Producto'])
+
+                # Rellenar Valor
+                campo_valor = driver.find_element(By.XPATH, "//input[@name='valor_unitario' or contains(@id, 'unit_value')]")
+                campo_valor.send_keys(str(fila['Valor']))
+
+                st.info(f"📍 Datos de {fila['Nombre']} posicionados. Revisa y guarda manualmente.")
+                
+                # Nota: No hacemos clic en GUARDAR automáticamente para que el usuario
+                # valide que la sesión sigue activa y los datos son correctos.
+                
+            except Exception as e_fila:
+                st.error(f"❌ Error en la fila {i+1}: Verifica si la sesión de Siigo expiró.")
+            
+            progreso.progress((i + 1) / len(df))
+            break # Hacemos solo el primero para probar estabilidad
+
+        st.success("🏁 Proceso de carga inicial finalizado.")
 
     except Exception as e:
-        st.error(f"❌ El proceso falló en el último paso mostrado. Error técnico: {str(e)}")
+        st.error(f"❌ Error general: {str(e)}")
     finally:
         if 'driver' in locals():
             driver.quit()
 
-if st.button("🚀 Iniciar Automatización"):
-    if user_email and user_pass and sheet_id:
-        ejecutar_robot(user_email, user_pass, sheet_id)
-    else:
-        st.error("⚠️ Falta completar datos.")
+if st.button("🚀 Iniciar Rellenado Automático"):
+    ejecutar_rellenado()
