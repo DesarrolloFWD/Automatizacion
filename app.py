@@ -3,6 +3,7 @@ import pandas as pd
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -17,14 +18,21 @@ with st.sidebar:
     sheet_id = st.text_input("ID de Google Sheet")
 
 def ejecutar_robot(email, password, sid):
+    # --- CONFIGURACIÓN DEL NAVEGADOR ---
     options = Options()
-    options.add_argument('--headless')
+    options.add_argument('--headless=new') # Modo invisible moderno
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-gpu')
+    
+    # --- EL TRUCO DEFINITIVO PARA STREAMLIT CLOUD ---
+    # Le decimos exactamente dónde están los archivos en Linux
+    options.binary_location = "/usr/bin/chromium" 
+    service = Service("/usr/bin/chromedriver")
     
     try:
-        # Iniciamos el driver de la forma más simple posible
-        driver = webdriver.Chrome(options=options)
+        # Arrancamos con las rutas forzadas
+        driver = webdriver.Chrome(service=service, options=options)
         wait = WebDriverWait(driver, 20)
 
         # 1. Leer Datos
@@ -50,12 +58,14 @@ def ejecutar_robot(email, password, sid):
             st.write(f"⚙️ Preparando DS para: {fila['Nombre']}")
             driver.get("https://siigonube.siigo.com/#/purchase/1889")
             time.sleep(5)
-            # Aquí irían los comandos de llenado una vez logremos entrar
             
-        st.success("🏁 Proceso terminado.")
+            # --- IMPRESIÓN DE PRUEBA ---
+            st.write("¡Logramos entrar a la ruta! Falta llenar campos.")
+            
+        st.success("🏁 Proceso de prueba terminado. ¡El navegador funciona!")
 
     except Exception as e:
-        st.error(f"❌ Error de conexión: {str(e)}")
+        st.error(f"❌ Error: {str(e)}")
     finally:
         if 'driver' in locals():
             driver.quit()
