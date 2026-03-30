@@ -18,54 +18,55 @@ with st.sidebar:
     sheet_id = st.text_input("ID de Google Sheet")
 
 def ejecutar_robot(email, password, sid):
-    # --- CONFIGURACIÓN DEL NAVEGADOR ---
-    options = Options()
-    options.add_argument('--headless=new') # Modo invisible moderno
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--disable-gpu')
-    
-    # --- EL TRUCO DEFINITIVO PARA STREAMLIT CLOUD ---
-    # Le decimos exactamente dónde están los archivos en Linux
-    options.binary_location = "/usr/bin/chromium" 
-    service = Service("/usr/bin/chromedriver")
-    
     try:
-        # Arrancamos con las rutas forzadas
-        driver = webdriver.Chrome(service=service, options=options)
-        wait = WebDriverWait(driver, 20)
-
-        # 1. Leer Datos
+        # PASO 1: LEER DATOS (Sin encender navegador aún)
+        st.write("📊 **Paso 1:** Leyendo datos de Google Sheets...")
         url_csv = f"https://docs.google.com/spreadsheets/d/{sid}/export?format=csv"
         df = pd.read_csv(url_csv)
-        st.success(f"✅ {len(df)} registros cargados.")
+        st.success(f"✅ ¡Éxito! {len(df)} registros listos para procesar.")
 
-        # 2. Login
-        st.write("🌐 Conectando a Siigo...")
-        driver.get("https://siigonube.siigo.com/#/login")
+        # PASO 2: CONFIGURACIÓN LIGERA DEL NAVEGADOR
+        st.write("⚙️ **Paso 2:** Encendiendo el robot (modo bajo consumo)...")
+        options = Options()
+        options.add_argument('--headless=new')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage') # Clave para evitar error de memoria
+        options.add_argument('--disable-gpu')
+        options.add_argument('--window-size=1920x1080')
+        # ¡EL SECRETO!: No cargar imágenes ni CSS pesado para ahorrar RAM
+        options.add_argument('--blink-settings=imagesEnabled=false') 
         
-        # Esperar al campo de usuario
+        options.binary_location = "/usr/bin/chromium" 
+        service = Service("/usr/bin/chromedriver")
+        
+        driver = webdriver.Chrome(service=service, options=options)
+        wait = WebDriverWait(driver, 20)
+        st.success("✅ ¡Robot encendido sin problemas!")
+
+        # PASO 3: ENTRAR A SIIGO
+        st.write("🌐 **Paso 3:** Cargando la página de Siigo...")
+        driver.get("https://siigonube.siigo.com/#/login")
+        st.success("✅ ¡Página cargada sin explotar!")
+        
+        # PASO 4: LOGIN
+        st.write("🔑 **Paso 4:** Ingresando usuario y contraseña...")
         user_input = wait.until(EC.element_to_be_clickable((By.ID, "username")))
         user_input.send_keys(email)
         driver.find_element(By.ID, "password").send_keys(password)
         driver.find_element(By.ID, "login-button").click()
         
-        st.write("🔑 Iniciando sesión... (espera 10s)")
+        st.write("⏳ Esperando a que cargue el menú principal (10 seg)...")
         time.sleep(10)
 
-        # 3. Proceso
-        for i, fila in df.iterrows():
-            st.write(f"⚙️ Preparando DS para: {fila['Nombre']}")
-            driver.get("https://siigonube.siigo.com/#/purchase/1889")
-            time.sleep(5)
-            
-            # --- IMPRESIÓN DE PRUEBA ---
-            st.write("¡Logramos entrar a la ruta! Falta llenar campos.")
-            
-        st.success("🏁 Proceso de prueba terminado. ¡El navegador funciona!")
+        # PASO 5: NAVEGACIÓN
+        st.write("📍 **Paso 5:** Buscando la ruta de Documentos Soporte...")
+        driver.get("https://siigonube.siigo.com/#/purchase/1889")
+        time.sleep(5)
+        
+        st.success("🏁 ¡LLEGAMOS A LA META DE PRUEBA! La conexión es 100% estable.")
 
     except Exception as e:
-        st.error(f"❌ Error: {str(e)}")
+        st.error(f"❌ El proceso falló en el último paso mostrado. Error técnico: {str(e)}")
     finally:
         if 'driver' in locals():
             driver.quit()
